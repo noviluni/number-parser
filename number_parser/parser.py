@@ -72,7 +72,7 @@ def _check_large_multiplier(current_token, total_value, current_grp_value, lang_
 
 
 def _build_number(token_list, lang_data):
-    """Incrementaly builds a number from the list of tokens."""
+    """Incrementally builds a number from the list of tokens."""
     total_value = 0
     current_grp_value = 0
     previous_token = None
@@ -158,19 +158,23 @@ def _normalize_dict(lang_dict):
     return {_strip_accents(word): number for word, number in lang_dict.items()}
 
 
-def _is_cardinal_token(token, lang_dict):
-    if token in lang_dict.all_numbers:
-        return token
-    return None
+def _is_cardinal_token(token, language):
+    lang_dict = LanguageData(language)
+    return bool(token in lang_dict.all_numbers)
 
 
-def _is_ordinal_token(token, lang_dict):
-    token = _apply_cardinal_conversion(token, lang_dict)
-    return _is_cardinal_token(token, lang_dict)
+def _is_ordinal_token(token, language):
+    token = _apply_cardinal_conversion(token, language)
+    return _is_cardinal_token(token, language)
 
 
-def _is_number_token(token, lang_dict):
-    return _is_cardinal_token(token, lang_dict) or _is_ordinal_token(token, lang_dict)
+def _is_skip_token(token, language):
+    lang_dict = LanguageData(language)
+    return bool(token in lang_dict.skip_tokens)
+
+
+def is_number_token(token, language):
+    return _is_cardinal_token(token, language) or _is_ordinal_token(token, language) # or _is_skip_token(token, language)
 
 
 def _apply_cardinal_conversion(input_string, language):
@@ -215,55 +219,68 @@ def parse(input_string, language='en'):
     Converts all the numbers in a sentence written in natural language to their numeric type while keeping
     the other words unchanged. Returns the transformed string.
     """
-    lang_data = LanguageData(language)
+
     tokens = _tokenize(input_string, language)
     if tokens is None:
         return None
 
-    final_sentence = []
-    current_sentence = []
-    tokens_taken = []
+    sentence = []
+    current_number = []
+    building_number = False
 
     for token in tokens:
-        compare_token = _strip_accents(token.lower())
-        if compare_token.isspace() or compare_token == "":
-            if not tokens_taken:
-                current_sentence.append(token)
-            continue
+        normalized_token = _strip_accents(token.lower())
+        is_number = is_number_token(normalized_token, language)
 
-        if compare_token in SENTENCE_SEPARATORS:
-            if tokens_taken:
-                myvalue = _build_number(tokens_taken, lang_data)
-                for each_number in myvalue:
-                    current_sentence.append(each_number)
-                    current_sentence.append(" ")
-                current_sentence.pop()
-            current_sentence.append(token)
-            final_sentence.extend(current_sentence)
-            tokens_taken = []
-            current_sentence = []
-            continue
+        if not building_number:  # case 1: it's not building a number
+            if is_number:
+                # start number building process
+                building_number = True
+                current_number.append(token)
+            else:
+                # continue with next token
+                sentence.append(token)
+        else:  # case 2: it's building a number
+            if is_number or token.isspace() or token == '' or _is_skip_token(token, language):
+                # add token to the current number
+                current_number.append(token)
+            else:  # build number
+                # 1. parse number
+                number = _parse_number_tokens(current_number, language)
+                sentence.append(number)
 
-        elif (compare_token in lang_data.all_numbers or
-                (compare_token in lang_data.skip_tokens and len(tokens_taken) != 0)):
-            tokens_taken.append(compare_token)
+                # 2. Add number to tokens
+                if current_number[-1].isspace():
+                    sentence.append(current_number[-1])
+                sentence.append(token)
 
-        else:
-            if tokens_taken:
-                myvalue = _build_number(tokens_taken, lang_data)
-                for each_number in myvalue:
-                    current_sentence.append(each_number)
-                    current_sentence.append(" ")
-                tokens_taken = []
-            current_sentence.append(token)
+                # 3. Reset process
+                building_number = False
+                current_number = []
+        print(sentence)
 
-    if tokens_taken:
-        myvalue = _build_number(tokens_taken, lang_data)
-        for each_number in myvalue:
-            current_sentence.append(each_number)
-            current_sentence.append(" ")
+    # When finishing the loop, if the last element is a number we need to add it
+    if building_number:
+        number = _parse_number_tokens(current_number, language)
+        sentence.append(number)
 
-    final_sentence.extend(current_sentence)
+    return ''.join(sentence)
 
-    output_string = ''.join(final_sentence).strip()
-    return output_string
+
+def _parse_number_tokens(current_number, language):
+    # TODO: Add logic to handle multpliple following numbers
+    # Basic idea:
+    # current_number = ['twenty', 'three', 'three']
+    # number = parse_number(current_number[0]) --> 20
+    # number = parse_number(f'{current_number[0]} {current_number[1]}') --> 23
+    # number = parse_number(f'{current_number[0]} {current_number[1]} {current_number[3]}') --> None
+    # '23 3'
+
+    current_number_str = ''.join(
+        map(_strip_accents, map(str.lower, current_number))
+    )
+    number = parse_number(current_number_str, language)
+    if not number:
+        # try with ordinal
+        number = parse_ordinal(current_number_str)
+    return str(number) if number else current_number_str

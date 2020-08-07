@@ -49,7 +49,7 @@ class TestNumberParser():
              "25 cows, 12 chickens and 125 kg of potatoes."),
             ("I have eight cows", "I have 8 cows"),
             ("I have eight cows three bulls and seven hundred and twelve million dollars ",
-                "I have 8 cows 3 bulls and 712000000 dollars"),
+                "I have 8 cows 3 bulls and 712000000 dollars "),
             ("They just won seventy-five thousand dollars", "They just won 75000 dollars"),
             ("I have eight cows. I don't have eighteen cows", "I have 8 cows. I don't have 18 cows"),
             ("thirty-four cows = thirty four cows", "34 cows = 34 cows"),

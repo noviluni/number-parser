@@ -247,9 +247,9 @@ def parse(input_string, language='en'):
             else:  # build number
                 # 1. parse number
                 number = _parse_number_tokens(current_number, language)
-                sentence.append(number)
 
-                # 2. Add number to tokens
+                # 2. Add number and current token to tokens
+                sentence.append(number)
                 if current_number[-1].isspace():
                     sentence.append(current_number[-1])
                 sentence.append(token)
@@ -257,7 +257,6 @@ def parse(input_string, language='en'):
                 # 3. Reset process
                 building_number = False
                 current_number = []
-        print(sentence)
 
     # When finishing the loop, if the last element is a number we need to add it
     if building_number:
